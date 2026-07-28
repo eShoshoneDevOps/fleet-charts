@@ -1,0 +1,22 @@
+name: Publish Helm charts to GHCR
+on:
+  push:
+    branches: [main]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Package and push charts
+        run: |
+          for chart in network/cluster-dns cloud/aws/hosted-zone; do
+            oci_dir=$(dirname "$chart")
+            helm package "$chart" -d /tmp/pkg
+            helm push /tmp/pkg/$(basename "$chart")-*.tgz oci://ghcr.io/eshoshonedevops/charts/$oci_dir
+          done
