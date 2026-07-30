@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-cluster-dns
+spec:
+  selector:
+    app: {{ .Release.Name }}-cluster-dns
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80

@@ -1,2 +1,6 @@
 note: platform
 message: Cluster
+image:
+  repository: nginx
+  tag: alpine
+replicaCount: 2
