@@ -1,6 +1,6 @@
 note: platform
-message: SneakyChange-2
+message: SneakyChange-3
 image:
   repository: nginx
   tag: alpine
-replicaCount: 2
+replicaCount: 3
