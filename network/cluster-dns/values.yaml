@@ -1,5 +1,5 @@
 note: platform
-message: Cluster
+message: Cluster-Upgraded
 image:
   repository: nginx
   tag: alpine
