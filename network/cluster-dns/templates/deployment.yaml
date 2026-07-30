@@ -9,6 +9,8 @@ spec:
       app: {{ .Release.Name }}-cluster-dns
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         app: {{ .Release.Name }}-cluster-dns
     spec:
