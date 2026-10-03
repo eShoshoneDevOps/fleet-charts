@@ -1,4 +1,4 @@
-message: "fixC-live-test"
+message: "branch-protection-test"
 replicas: 3
 labels:
   drift: "experiment-2"
