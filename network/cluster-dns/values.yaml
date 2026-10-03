@@ -3,4 +3,4 @@ message: SneakyChange-3
 image:
   repository: nginx
   tag: alpine
-replicaCount: 3
+replicaCount: 2
