@@ -1,0 +1,4 @@
+message: "drifted-transient-test"
+replicas: 3
+labels:
+  drift: "experiment-2"

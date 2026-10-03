@@ -15,6 +15,10 @@ on:
         description: "Force publish all matrix charts regardless of diff"
         type: boolean
         default: false
+      simulate_transient_failure:
+        description: "Experiment 2 only — inject a helm shim that fails 'helm show chart' with a 503, to test Fix A's fail-safe behavior"
+        type: boolean
+        default: false
   push:
     branches: [main, 'feature/E7N-791-*']  # feature branch included for POC dispatch; tighten to [main] before the real PR
     paths:
@@ -30,6 +34,8 @@ jobs:
       matrix:
         include:
           - chart_dir: poc/version-check-poc
+            oci_repo: ghcr.io/eshoshonedevops/charts/poc
+          - chart_dir: poc/version-check-poc-noanchor
             oci_repo: ghcr.io/eshoshonedevops/charts/poc
     steps:
       - uses: actions/checkout@v4
@@ -57,6 +63,24 @@ jobs:
           helm package "${{ matrix.chart_dir }}" -d /tmp/pkg
           tgz=$(ls /tmp/pkg/${{ steps.chart.outputs.name }}-*.tgz)
           echo "tgz=$tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Install transient-failure helm shim (Experiment 2 only)
+        if: github.event.inputs.simulate_transient_failure == 'true'
+        run: |
+          set -euo pipefail
+          REAL_HELM="$(command -v helm)"
+          mkdir -p "$RUNNER_TEMP/shim-bin"
+          cat > "$RUNNER_TEMP/shim-bin/helm" <<SHIM
+          #!/usr/bin/env bash
+          if [[ "\$1" == "show" && "\$2" == "chart" ]]; then
+            echo "Error: failed to fetch: unexpected status: 503 Service Unavailable" >&2
+            exit 1
+          fi
+          exec "$REAL_HELM" "\$@"
+          SHIM
+          chmod +x "$RUNNER_TEMP/shim-bin/helm"
+          echo "$RUNNER_TEMP/shim-bin" >> "$GITHUB_PATH"
+          echo "::warning::Experiment 2 shim installed — helm show chart will fail with a fake 503 for this run"
 
       - name: Version-bump check
         id: version_check
