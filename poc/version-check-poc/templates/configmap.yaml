@@ -7,3 +7,4 @@ metadata:
 data:
   message: {{ .Values.message | quote }}
   replicas: {{ .Values.replicas | quote }}
+  drift_marker: "round-2-added-line"
