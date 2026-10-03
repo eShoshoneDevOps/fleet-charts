@@ -24,7 +24,12 @@ set -e
 
 if [[ $show_exit -ne 0 ]]; then
   # Non-zero. Was it a real 404 or a transient failure?
-  if echo "$show_stderr" | grep -qiE 'not found|manifest unknown|no such|name unknown|404'; then
+  # NOTE: "no such" is scoped to a specific following word (repository/image/
+  # tag/manifest), not bare — a bare "no such" also matches DNS failures like
+  # "no such host", which would silently misclassify a network outage as a
+  # real 404 and publish anyway. Found via Experiment 1's real stderr capture
+  # against live GHCR (the placeholder fixture didn't use this exact wording).
+  if echo "$show_stderr" | grep -qiE 'not found|manifest unknown|no such (repository|image|tag|manifest)|name unknown|404'; then
     echo "::notice::PASS — $NAME@$VERSION not yet published, safe to publish"
     echo "action=publish"
     exit 0

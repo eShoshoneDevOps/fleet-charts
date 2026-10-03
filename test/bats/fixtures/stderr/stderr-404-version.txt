@@ -1,2 +1,1 @@
-Error: failed to download "oci://<REGISTRY_HOST>/<ORG>/<PARENT>/<CHART>" at version "9.9.9"
-Error: GET "https://<REGISTRY_HOST>/v2/<ORG>/<PARENT>/<CHART>/manifests/9.9.9": response status code 404: not found: name=<ORG>/<PARENT>/<CHART> version=9.9.9
+Error: failed to perform "FetchReference" on source: ghcr.io/eshoshonedevops/charts/poc/version-check-poc:9.9.9: not found

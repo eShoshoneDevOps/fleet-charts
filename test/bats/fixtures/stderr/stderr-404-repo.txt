@@ -1,2 +1,1 @@
-Error: failed to download "oci://<REGISTRY_HOST>/<ORG>/<PARENT>/nonexistent-chart"
-Error: GET "https://<REGISTRY_HOST>/v2/<ORG>/<PARENT>/nonexistent-chart/manifests/0.1.0": response status code 404: name unknown: repository not found
+Error: failed to perform "FetchReference" on source: ghcr.io/eshoshonedevops/charts/poc/totally-nonexistent-chart:0.1.0: not found

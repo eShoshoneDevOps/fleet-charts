@@ -7,7 +7,7 @@
 
 setup() {
   FIXTURES="$BATS_TEST_DIRNAME/fixtures/stderr"
-  REGEX='not found|manifest unknown|no such|name unknown|404'
+  REGEX='not found|manifest unknown|no such (repository|image|tag|manifest)|name unknown|404'
 }
 
 _matches() {

@@ -1,1 +1,1 @@
-Error: failed to do request: Head "https://<REGISTRY_HOST>/v2/<ORG>/<PARENT>/<CHART>/manifests/0.1.0": dial tcp 127.0.0.1:443: connect: connection refused
+Error: failed to perform "FetchReference" on source: Get "https://ghcr-deliberately-invalid-test-host.invalid/v2/eshoshonedevops/charts/poc/version-check-poc/manifests/0.1.0": dial tcp: lookup ghcr-deliberately-invalid-test-host.invalid: no such host
