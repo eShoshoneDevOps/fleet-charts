@@ -1,4 +1,4 @@
-message: "drifted-transient-test"
+message: "fixC-live-test"
 replicas: 3
 labels:
   drift: "experiment-2"
