@@ -20,7 +20,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, 'feature/E7N-791-*']  # feature branch included for POC dispatch; tighten to [main] before the real PR
+    branches: [main]
     paths:
       - 'poc/**'
 
