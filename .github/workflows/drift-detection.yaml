@@ -1,0 +1,113 @@
+name: Out-of-band drift detection
+# Task 6/6 of the E7N-791 guardrail list. See
+# ~/Documents/handoffs_work/e7n-791-mini-explainers.txt.
+#
+# Every guardrail added for E7N-791 so far (Fix D/A/C, branch protection,
+# CODEOWNERS) only governs what happens when a chart goes through THIS
+# pipeline. None of them stop a manual `helm push` run by hand from a
+# laptop, which bypasses all of them -- and that is exactly how several
+# of this session's own test fixtures got into the registry. This
+# workflow closes that gap independently of any push event: on a
+# schedule, it re-packages every chart from git HEAD and diffs it against
+# what the registry actually serves at that chart's declared version.
+# A mismatch means something was published that did not come from a
+# clean CI run of the current commit.
+#
+# Deliberately read-only (no packages: write) -- this workflow only ever
+# pulls and compares, never pushes.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'   # once a day, off the hour to avoid GH's top-of-hour pile-up
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  detect:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has_charts: ${{ steps.detect.outputs.has_charts }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5.1.0
+
+      - name: Verify yq available
+        run: .github/scripts/verify-yq.sh
+
+      - name: Detect all charts
+        id: detect
+        env:
+          OCI_REGISTRY_ROOT: ghcr.io/eshoshonedevops/charts
+        run: .github/scripts/detect-changed-charts.sh --all >> "$GITHUB_OUTPUT"
+
+  drift-check:
+    needs: detect
+    if: needs.detect.outputs.has_charts == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5.1.0
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310   # v5.0.1
+        with:
+          version: 'v3.14.0'
+
+      - name: Log in to GHCR (read-only pull)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Verify yq available
+        run: .github/scripts/verify-yq.sh
+
+      - name: Check for drift
+        run: .github/scripts/detect-drift.sh "${{ matrix.chart_dir }}" "${{ matrix.oci_repo }}"
+
+  report-drift:
+    needs: drift-check
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue for the drift
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea   # v7.0.1
+        with:
+          script: |
+            const title = "Drift detected: published chart(s) do not match git HEAD";
+            const body = [
+              `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              "",
+              "One or more charts in the registry do not match what git HEAD for their directory would produce.",
+              "This usually means a chart was pushed manually (bypassing publish-charts.yaml) rather than through CI.",
+              "",
+              "See the failing job(s) in the run above for which chart(s) and the diff detail.",
+            ].join("\n");
+
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "drift-detected",
+            });
+            if (existing.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing[0].number,
+                body: `New failing run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["drift-detected"],
+              });
+            }
