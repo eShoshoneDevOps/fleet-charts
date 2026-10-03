@@ -10,12 +10,15 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - '.github/scripts/**'
-      - '.github/workflows/publish-charts.yaml'
-      - '.github/workflows/version-bump-check.yml'
-      - '.github/workflows/test-scripts.yml'
-      - 'test/bats/**'
+    # Deliberately NOT path-filtered, unlike the push trigger below.
+    # `bats` is a required branch-protection status check -- a path
+    # filter here means it silently never runs (not pass, not fail, just
+    # absent) for any PR that doesn't happen to touch these exact paths,
+    # which GitHub's required-status-checks treats as permanently
+    # unsatisfied, blocking the merge of an otherwise-unrelated PR.
+    # Found live (2026-10-03) on the CODEOWNERS PR. The suite runs in
+    # under a second per its own README -- no real cost to running it on
+    # every PR, and it removes this whole class of self-inflicted lockout.
   push:
     branches:
       - main
