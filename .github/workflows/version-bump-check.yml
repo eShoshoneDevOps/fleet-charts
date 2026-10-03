@@ -1,0 +1,58 @@
+name: Version-bump check
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for bypass label (PR events only)
+        id: bypass
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          labels=$(gh pr view "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --json labels -q '.labels[].name' || echo "")
+          if echo "$labels" | grep -q '^skip-version-check$'; then
+            echo "::warning::skip-version-check label present — bypassing version-bump gate"
+            echo "bypass=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bypass=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Determine diff range
+        if: steps.bypass.outputs.bypass != 'true'
+        id: range
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE="origin/${{ github.base_ref }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            git fetch origin "${{ github.base_ref }}" --quiet
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$HEAD" >> "$GITHUB_OUTPUT"
+
+      - name: Version-bump gate
+        if: steps.bypass.outputs.bypass != 'true'
+        run: .github/scripts/chart-touch-gate.sh "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}"
