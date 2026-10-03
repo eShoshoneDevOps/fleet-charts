@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-common-labels
 data:
-  shared-value: "v1"
+  shared-value: "v2"
