@@ -138,8 +138,25 @@ jobs:
           exit "$exit_code"
 
       - name: Push chart to GHCR
+        id: push
         if: steps.version_check.outputs.action == 'publish'
-        run: helm push "${{ steps.package.outputs.tgz }}" "oci://${{ matrix.oci_repo }}"
+        run: |
+          set -euo pipefail
+          push_output=$(helm push "${{ steps.package.outputs.tgz }}" "oci://${{ matrix.oci_repo }}" 2>&1)
+          echo "$push_output"
+          digest=$(echo "$push_output" | grep -oE 'sha256:[a-f0-9]+' | head -1)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Verify push (Fix C — post-push digest round-trip)
+        if: steps.version_check.outputs.action == 'publish'
+        run: |
+          set -euo pipefail
+          .github/scripts/verify-push.sh \
+            "${{ steps.chart.outputs.name }}" \
+            "${{ steps.chart.outputs.version }}" \
+            "${{ matrix.oci_repo }}" \
+            "${{ steps.package.outputs.tgz }}" \
+            "${{ steps.push.outputs.digest }}"
 
       - name: Summary
         if: always()
