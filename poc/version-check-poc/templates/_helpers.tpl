@@ -5,7 +5,7 @@
 {{- define "version-check-poc.labels" -}}
 app.kubernetes.io/name: {{ include "version-check-poc.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}-DRIFTED
 {{- range $k, $v := .Values.labels }}
 {{ $k }}: {{ $v | quote }}
 {{- end }}
