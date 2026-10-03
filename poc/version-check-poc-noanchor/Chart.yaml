@@ -1,0 +1,6 @@
+apiVersion: v2
+name: version-check-poc-noanchor
+description: Publish-workflow silent-overwrite POC chart (no anchor, for Fix A isolation)
+type: application
+version: 0.2.0
+appVersion: "0.1.0"

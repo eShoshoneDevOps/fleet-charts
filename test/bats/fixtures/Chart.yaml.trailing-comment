@@ -1,0 +1,6 @@
+apiVersion: v2
+name: testchart-trailing-comment
+description: Fixture — trailing comment on the version line (renovate pin style)
+type: application
+version: 0.1.0 # pinned by renovate 2026-10-01
+appVersion: "0.1.0"

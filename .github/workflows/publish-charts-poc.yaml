@@ -1,0 +1,108 @@
+name: Publish charts to GHCR (E7N-791 POC — version-check)
+# VULNERABLE BASELINE — intentionally unfixed. Mirrors section 5A/5B "before"
+# from the E7N-791 handoff. Read Chart.yaml uses awk (bug class 1); the
+# Version-bump check swallows stderr (bug class 2). Fix D/A land as a
+# follow-up edit to THIS file once Experiment 0's reproduction is confirmed.
+#
+# Scoped to poc/ chart dirs only — does not touch the existing
+# publish-charts.yaml pipeline that network/cluster-dns and
+# cloud/aws/hosted-zone depend on.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: "Force publish all matrix charts regardless of diff"
+        type: boolean
+        default: false
+      simulate_transient_failure:
+        description: "Experiment 2 only — inject a helm shim that fails 'helm show chart' with a 503, to test Fix A's fail-safe behavior"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - 'poc/**'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - chart_dir: poc/version-check-poc
+            oci_repo: ghcr.io/eshoshonedevops/charts/poc
+          - chart_dir: poc/version-check-poc-noanchor
+            oci_repo: ghcr.io/eshoshonedevops/charts/poc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Verify yq available
+        run: .github/scripts/verify-yq.sh
+
+      - name: Read Chart.yaml
+        id: chart
+        run: |
+          set -euo pipefail
+          .github/scripts/read-chart-yaml.sh "${{ matrix.chart_dir }}" >> "$GITHUB_OUTPUT"
+
+      - name: Package chart (new)
+        id: package
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pkg
+          helm package "${{ matrix.chart_dir }}" -d /tmp/pkg
+          tgz=$(ls /tmp/pkg/${{ steps.chart.outputs.name }}-*.tgz)
+          echo "tgz=$tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Install transient-failure helm shim (Experiment 2 only)
+        if: github.event.inputs.simulate_transient_failure == 'true'
+        run: |
+          set -euo pipefail
+          REAL_HELM="$(command -v helm)"
+          mkdir -p "$RUNNER_TEMP/shim-bin"
+          cat > "$RUNNER_TEMP/shim-bin/helm" <<SHIM
+          #!/usr/bin/env bash
+          if [[ "\$1" == "show" && "\$2" == "chart" ]]; then
+            echo "Error: failed to fetch: unexpected status: 503 Service Unavailable" >&2
+            exit 1
+          fi
+          exec "$REAL_HELM" "\$@"
+          SHIM
+          chmod +x "$RUNNER_TEMP/shim-bin/helm"
+          echo "$RUNNER_TEMP/shim-bin" >> "$GITHUB_PATH"
+          echo "::warning::Experiment 2 shim installed — helm show chart will fail with a fake 503 for this run"
+
+      - name: Version-bump check
+        id: version_check
+        run: |
+          set -euo pipefail
+          set +e
+          output=$(.github/scripts/version-bump-check.sh \
+            "${{ steps.chart.outputs.name }}" \
+            "${{ steps.chart.outputs.version }}" \
+            "${{ matrix.oci_repo }}" \
+            "${{ steps.package.outputs.tgz }}")
+          exit_code=$?
+          set -e
+          echo "$output"
+          echo "$output" | grep '^action=' >> "$GITHUB_OUTPUT"
+          exit "$exit_code"
+
+      - name: Push chart to GHCR
+        if: steps.version_check.outputs.action == 'publish'
+        run: helm push "${{ steps.package.outputs.tgz }}" "oci://${{ matrix.oci_repo }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "chart=${{ steps.chart.outputs.name }}@${{ steps.chart.outputs.version }} action=${{ steps.version_check.outputs.action }}" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,1 @@
+Error: failed to perform "FetchReference" on source: Get "https://ghcr-deliberately-invalid-test-host.invalid/v2/eshoshonedevops/charts/poc/version-check-poc/manifests/0.1.0": dial tcp: lookup ghcr-deliberately-invalid-test-host.invalid: no such host

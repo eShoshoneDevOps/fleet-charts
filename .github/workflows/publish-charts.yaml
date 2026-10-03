@@ -1,22 +1,136 @@
 name: Publish Helm charts to GHCR
+# Hardened per E7N-791 (publish-workflow silent-overwrite incident, 2026-09-29).
+# See ~/Documents/handoffs_work/e7n-791-mini-explainers.txt for the full
+# investigation — this is the production shape of what that POC proved.
+#
+# Fixes applied:
+#   D — Chart.yaml parsed via yq (scripts/read-chart-yaml.sh), not awk.
+#       awk's field-2 extraction returns a YAML anchor label (e.g. "&version")
+#       instead of the resolved value, which 404s, which looks like "safe to
+#       publish" — this is the PROVEN root cause of the production incident.
+#   A — version-bump check (scripts/version-bump-check.sh) distinguishes a
+#       real 404 (chart genuinely not published) from a transient failure
+#       (auth blip, 5xx, network outage) via stderr-signature matching, and
+#       fails closed on anything it can't positively identify as a 404.
+#   J — explicit "yq available" guard, so Fix D fails loud instead of
+#       mysteriously if a future runner image ever drops yq.
+#   F — actions pinned to their v5 majors (Node 20 is deprecated).
+#   G — every `uses:` pinned to an immutable commit SHA, tag in a comment.
+#   H — runs-on ubuntu-24.04 explicitly, not ubuntu-latest (which rolls
+#       forward to a new OS version on its own schedule).
+#   I — permissions scoped per-job, not at the workflow root.
+#
+# Chart discovery (scripts/detect-changed-charts.sh) is diff-based by
+# default — only charts actually touched by the push get processed. This
+# matters for blast radius: force_all=true (workflow_dispatch only)
+# re-validates and potentially re-publishes EVERY chart in the repo in one
+# run, which is a deliberate, occasional, manually-triggered action, not
+# the default behavior on every merge.
+
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: "Process every chart in the repo, not just changed ones (use sparingly — see blast-radius note above)"
+        type: boolean
+        default: false
+
 jobs:
+  detect:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has_charts: ${{ steps.detect.outputs.has_charts }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Verify yq available
+        run: .github/scripts/verify-yq.sh
+
+      - name: Detect charts to process
+        id: detect
+        env:
+          OCI_REGISTRY_ROOT: ghcr.io/eshoshonedevops/charts
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_all }}" == "true" ]]; then
+            .github/scripts/detect-changed-charts.sh --all >> "$GITHUB_OUTPUT"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+            # First push to a branch: github.event.before is all-zeros.
+            # Fall back to --all rather than diffing against a null ref.
+            if [[ "$BASE" =~ ^0+$ ]]; then
+              .github/scripts/detect-changed-charts.sh --all >> "$GITHUB_OUTPUT"
+            else
+              .github/scripts/detect-changed-charts.sh "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
   publish:
-    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.has_charts == 'true'
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
+        with:
+          version: 'v3.14.0'
+
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
-      - name: Package and push charts
+
+      - name: Verify yq available
+        run: .github/scripts/verify-yq.sh
+
+      - name: Read Chart.yaml
+        id: chart
         run: |
-          for chart in network/cluster-dns cloud/aws/hosted-zone; do
-            oci_dir=$(dirname "$chart")
-            helm package "$chart" -d /tmp/pkg
-            helm push /tmp/pkg/$(basename "$chart")-*.tgz oci://ghcr.io/eshoshonedevops/charts/$oci_dir
-          done
+          set -euo pipefail
+          .github/scripts/read-chart-yaml.sh "${{ matrix.chart_dir }}" >> "$GITHUB_OUTPUT"
+
+      - name: Package chart
+        id: package
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pkg
+          helm package "${{ matrix.chart_dir }}" -d /tmp/pkg
+          tgz=$(ls /tmp/pkg/${{ steps.chart.outputs.name }}-*.tgz)
+          echo "tgz=$tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Version-bump check
+        id: version_check
+        run: |
+          set -euo pipefail
+          set +e
+          output=$(.github/scripts/version-bump-check.sh \
+            "${{ steps.chart.outputs.name }}" \
+            "${{ steps.chart.outputs.version }}" \
+            "${{ matrix.oci_repo }}" \
+            "${{ steps.package.outputs.tgz }}")
+          exit_code=$?
+          set -e
+          echo "$output"
+          echo "$output" | grep '^action=' >> "$GITHUB_OUTPUT"
+          exit "$exit_code"
+
+      - name: Push chart to GHCR
+        if: steps.version_check.outputs.action == 'publish'
+        run: helm push "${{ steps.package.outputs.tgz }}" "oci://${{ matrix.oci_repo }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "chart=${{ steps.chart.outputs.name }}@${{ steps.chart.outputs.version }} action=${{ steps.version_check.outputs.action }}" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: testchart-missing-version
+description: Fixture — no version field (should fail Fix D guard)
+type: application
+appVersion: "0.1.0"
