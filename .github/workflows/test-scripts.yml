@@ -12,7 +12,7 @@ on:
       - main
     paths:
       - '.github/scripts/**'
-      - '.github/workflows/publish-charts.yml'
+      - '.github/workflows/publish-charts.yaml'
       - '.github/workflows/version-bump-check.yml'
       - '.github/workflows/test-scripts.yml'
       - 'test/bats/**'
@@ -23,8 +23,7 @@ on:
       - '.github/scripts/**'
       - 'test/bats/**'
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   bats:
