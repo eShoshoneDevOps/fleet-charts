@@ -11,15 +11,18 @@ blobs and MUST NOT match the transient blobs.
 | 3. Chart repo does NOT exist | REGEX MATCHES | `stderr-404-repo.txt` | REAL (captured against live GHCR, 2026-10-03) |
 | 4. Auth failure (logged out) | REGEX DOES NOT MATCH | `stderr-auth-failed.txt` | placeholder — see note below |
 | 5. Network failure (DNS blackhole) | REGEX DOES NOT MATCH | `stderr-dns-blackhole.txt` | REAL (captured via invalid hostname, 2026-10-03) |
-| 6. Registry 5xx / rate limit | REGEX DOES NOT MATCH | `stderr-registry-5xx.txt` | placeholder, optional per handoff |
+| 6. Registry 5xx / rate limit | REGEX DOES NOT MATCH | `stderr-registry-5xx.txt` | REAL (captured via local fake-503 HTTP server, 2026-10-03) |
 
-**Case 4 note:** attempted real capture via `HELM_REGISTRY_CONFIG` pointed
-at an empty scratch config. Didn't work — the pull still succeeded (exit 0),
-meaning the OCI client falls back to another credential source (Docker's
-own `credsStore: osxkeychain` in `~/.docker/config.json`) that isn't
-controlled by that env var. Didn't pursue further since neutralizing that
-credential risks disrupting real shared credentials other tools use.
-Placeholder content kept as the best available stand-in.
+**Case 4 note:** confirmed root cause — `docker-credential-osxkeychain`
+stores the GHCR PAT keyed by hostname directly in the macOS keychain, and
+Helm's OCI client queries that credential helper DIRECTLY, independent of
+both `HELM_REGISTRY_CONFIG` and `DOCKER_CONFIG` env vars (tried both,
+separately and together — neither blocked it). Genuinely simulating
+"logged out" would mean removing/overwriting the one real working
+credential every tool on the machine shares for ghcr.io, with no safe way
+to restore it mid-session. Didn't pursue further for that reason.
+Placeholder content kept as the best available stand-in. See
+reference_ghcr_runbook memory for the full credential-helper writeup.
 
 **REAL REGRESSION FOUND (now fixed):** the original regex's bare `no such`
 alternative matched Case 5's real stderr — `"...dial tcp: lookup
