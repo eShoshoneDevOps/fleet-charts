@@ -1,0 +1,29 @@
+# CODEOWNERS — platform chart ownership
+#
+# NOTE (sandbox, 2026-10-03): only one real account exists in this org
+# (@pseudonative), so every pattern below currently maps to the same
+# owner — demonstrating the correct ownership STRUCTURE, not enforcing
+# real review (require_code_owner_reviews is deliberately left OFF in
+# branch protection; see e7n-791-mini-explainers.txt entry for why).
+# In a real multi-person org, replace these with actual GitHub teams
+# (e.g. @org/platform-team, @org/network-team) matched to who genuinely
+# owns each area, then turn enforcement on.
+#
+# Last-matching pattern wins, same as .gitignore. Most specific patterns
+# go at the bottom.
+
+# Default owner for anything not matched below
+*                             @pseudonative
+
+# The publish pipeline itself — changes here affect EVERY chart's
+# publish path, not just one. Should always require review regardless
+# of which chart directory a PR also touches.
+/.github/workflows/          @pseudonative
+/.github/scripts/            @pseudonative
+/test/bats/                  @pseudonative
+
+# Chart directories, by area
+/network/                    @pseudonative
+/cloud/                      @pseudonative
+/shared/                     @pseudonative
+/poc/                        @pseudonative
