@@ -1,0 +1,6 @@
+apiVersion: v2
+name: testchart-plain
+description: Fixture — plain scalar version, no quotes, no anchor
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

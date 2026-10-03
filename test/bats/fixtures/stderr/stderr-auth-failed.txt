@@ -1,0 +1,1 @@
+Error: failed to authorize: failed to fetch oauth token: unexpected status from GET request to https://<REGISTRY_HOST>/token?scope=repository%3A<ORG>%2F<PARENT>%2F<CHART>%3Apull&service=<REGISTRY_HOST>: 401 Unauthorized
