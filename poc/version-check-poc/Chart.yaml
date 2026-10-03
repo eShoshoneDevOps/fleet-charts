@@ -1,0 +1,6 @@
+apiVersion: v2
+name: version-check-poc
+description: Publish-workflow silent-overwrite POC chart
+type: application
+version: &version 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,109 @@
+name: Publish charts to GHCR (E7N-791 POC — version-check)
+# VULNERABLE BASELINE — intentionally unfixed. Mirrors section 5A/5B "before"
+# from the E7N-791 handoff. Read Chart.yaml uses awk (bug class 1); the
+# Version-bump check swallows stderr (bug class 2). Fix D/A land as a
+# follow-up edit to THIS file once Experiment 0's reproduction is confirmed.
+#
+# Scoped to poc/ chart dirs only — does not touch the existing
+# publish-charts.yaml pipeline that network/cluster-dns and
+# cloud/aws/hosted-zone depend on.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: "Force publish all matrix charts regardless of diff"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - 'poc/**'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - chart_dir: poc/version-check-poc
+            oci_repo: ghcr.io/eshoshonedevops/charts/poc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Read Chart.yaml
+        id: chart
+        run: |
+          set -euo pipefail
+          CHART_DIR="${{ matrix.chart_dir }}"
+          NAME="$(awk '/^name:/{print $2; exit}' "$CHART_DIR/Chart.yaml")"
+          VERSION="$(awk '/^version:/{print $2; exit}' "$CHART_DIR/Chart.yaml")"
+          [[ -n "$NAME" ]]    || { echo "::error::$CHART_DIR/Chart.yaml has no name field"    ; exit 1; }
+          [[ -n "$VERSION" ]] || { echo "::error::$CHART_DIR/Chart.yaml has no version field" ; exit 1; }
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "::notice::Chart: $NAME@$VERSION from $CHART_DIR"
+
+      - name: Package chart (new)
+        id: package
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pkg
+          helm package "${{ matrix.chart_dir }}" -d /tmp/pkg
+          tgz=$(ls /tmp/pkg/${{ steps.chart.outputs.name }}-*.tgz)
+          echo "tgz=$tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Version-bump check
+        id: version_check
+        run: |
+          set -euo pipefail
+          NAME="${{ steps.chart.outputs.name }}"
+          VERSION="${{ steps.chart.outputs.version }}"
+          OCI_REPO="${{ matrix.oci_repo }}"
+          FULL_OCI="oci://$OCI_REPO/$NAME"
+
+          echo "Checking whether $FULL_OCI --version $VERSION already exists on the registry"
+
+          if ! helm show chart "$FULL_OCI" --version "$VERSION" >/dev/null 2>&1; then
+            echo "::notice::PASS — $NAME@$VERSION not yet published, safe to publish new artifact"
+            echo "action=publish" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "$NAME@$VERSION already exists — running content comparison to detect silent overwrite"
+
+          mkdir -p /tmp/vc-existing-pull /tmp/vc-existing-tree /tmp/vc-new-tree
+          helm pull "$FULL_OCI" --version "$VERSION" -d /tmp/vc-existing-pull
+          existing_tgz="$(ls /tmp/vc-existing-pull/*.tgz)"
+
+          tar xzf "$existing_tgz" -C /tmp/vc-existing-tree
+          tar xzf "${{ steps.package.outputs.tgz }}" -C /tmp/vc-new-tree
+
+          if diff -rq /tmp/vc-existing-tree /tmp/vc-new-tree >/dev/null; then
+            echo "::notice::PASS — identical content, existing $VERSION unchanged. SKIP push (idempotent no-op)"
+            echo "action=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::VERSION-BUMP VIOLATION"
+          diff -rq /tmp/vc-existing-tree /tmp/vc-new-tree || true
+          echo "action=fail" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Push chart to GHCR
+        if: steps.version_check.outputs.action == 'publish'
+        run: helm push "${{ steps.package.outputs.tgz }}" "oci://${{ matrix.oci_repo }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "chart=${{ steps.chart.outputs.name }}@${{ steps.chart.outputs.version }} action=${{ steps.version_check.outputs.action }}" >> "$GITHUB_STEP_SUMMARY"

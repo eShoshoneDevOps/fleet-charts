@@ -1,0 +1,3 @@
+message: "initial"
+replicas: 1
+labels: {}
