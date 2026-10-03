@@ -101,6 +101,17 @@ jobs:
           set -euo pipefail
           .github/scripts/read-chart-yaml.sh "${{ matrix.chart_dir }}" >> "$GITHUB_OUTPUT"
 
+      - name: Helm lint
+        run: |
+          set -euo pipefail
+          # Resolves declared dependencies (file://, repo-hosted, etc.) before
+          # linting. A no-op for charts with no dependencies: block. Deliberately
+          # NOT swallowed on failure (e.g. `|| true`) — a broken dependency
+          # reference should fail loud here, not slip through to lint passing
+          # against stale/missing vendored charts.
+          helm dependency update "${{ matrix.chart_dir }}"
+          helm lint "${{ matrix.chart_dir }}"
+
       - name: Package chart
         id: package
         run: |
