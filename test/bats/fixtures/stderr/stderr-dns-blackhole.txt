@@ -1,0 +1,1 @@
+Error: failed to do request: Head "https://<REGISTRY_HOST>/v2/<ORG>/<PARENT>/<CHART>/manifests/0.1.0": dial tcp 127.0.0.1:443: connect: connection refused

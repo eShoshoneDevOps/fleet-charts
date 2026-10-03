@@ -1,0 +1,6 @@
+apiVersion: v2
+name: testchart-anchor
+description: Fixture — YAML anchor on version (the exact platform-alerts regression shape)
+type: application
+version: &version 0.1.0
+appVersion: "0.1.0"

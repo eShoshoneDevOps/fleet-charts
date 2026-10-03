@@ -1,0 +1,53 @@
+# Shell-script unit tests for publish-charts.yml logic.
+#
+# Runs bats-core against scripts under .github/scripts/ using fixtures
+# under test/bats/fixtures/. Also runs shellcheck on every script.
+# Triggers on PRs that touch any of the covered paths.
+
+name: Shell-script unit tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/scripts/**'
+      - '.github/workflows/publish-charts.yml'
+      - '.github/workflows/version-bump-check.yml'
+      - '.github/workflows/test-scripts.yml'
+      - 'test/bats/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/scripts/**'
+      - 'test/bats/**'
+
+permissions:
+  contents: read
+
+jobs:
+  bats:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5.1.0
+
+      - name: Install bats + shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bats shellcheck
+
+      - name: Install yq v4
+        run: |
+          # yq v4 is a Go binary from mikefarah/yq, pre-installed on ubuntu-24.04.
+          # Verify it's the Go v4, not the Python-era v3.
+          yq --version
+          yq --version | grep -q 'version v4' || { echo "::error::yq v4 required"; exit 1; }
+
+      - name: Shellcheck all scripts
+        run: shellcheck .github/scripts/*.sh
+
+      - name: Run bats
+        run: bats --print-output-on-failure test/bats/

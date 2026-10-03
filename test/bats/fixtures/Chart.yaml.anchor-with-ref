@@ -1,0 +1,6 @@
+apiVersion: v2
+name: testchart-anchor-ref
+description: Fixture — YAML anchor on version, downstream reference on appVersion
+type: application
+version: &version 0.1.0
+appVersion: *version
