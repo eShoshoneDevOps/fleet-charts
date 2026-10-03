@@ -86,38 +86,17 @@ jobs:
         id: version_check
         run: |
           set -euo pipefail
-          NAME="${{ steps.chart.outputs.name }}"
-          VERSION="${{ steps.chart.outputs.version }}"
-          OCI_REPO="${{ matrix.oci_repo }}"
-          FULL_OCI="oci://$OCI_REPO/$NAME"
-
-          echo "Checking whether $FULL_OCI --version $VERSION already exists on the registry"
-
-          if ! helm show chart "$FULL_OCI" --version "$VERSION" >/dev/null 2>&1; then
-            echo "::notice::PASS — $NAME@$VERSION not yet published, safe to publish new artifact"
-            echo "action=publish" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "$NAME@$VERSION already exists — running content comparison to detect silent overwrite"
-
-          mkdir -p /tmp/vc-existing-pull /tmp/vc-existing-tree /tmp/vc-new-tree
-          helm pull "$FULL_OCI" --version "$VERSION" -d /tmp/vc-existing-pull
-          existing_tgz="$(ls /tmp/vc-existing-pull/*.tgz)"
-
-          tar xzf "$existing_tgz" -C /tmp/vc-existing-tree
-          tar xzf "${{ steps.package.outputs.tgz }}" -C /tmp/vc-new-tree
-
-          if diff -rq /tmp/vc-existing-tree /tmp/vc-new-tree >/dev/null; then
-            echo "::notice::PASS — identical content, existing $VERSION unchanged. SKIP push (idempotent no-op)"
-            echo "action=skip" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "::error::VERSION-BUMP VIOLATION"
-          diff -rq /tmp/vc-existing-tree /tmp/vc-new-tree || true
-          echo "action=fail" >> "$GITHUB_OUTPUT"
-          exit 1
+          set +e
+          output=$(.github/scripts/version-bump-check.sh \
+            "${{ steps.chart.outputs.name }}" \
+            "${{ steps.chart.outputs.version }}" \
+            "${{ matrix.oci_repo }}" \
+            "${{ steps.package.outputs.tgz }}")
+          exit_code=$?
+          set -e
+          echo "$output"
+          echo "$output" | grep '^action=' >> "$GITHUB_OUTPUT"
+          exit "$exit_code"
 
       - name: Push chart to GHCR
         if: steps.version_check.outputs.action == 'publish'

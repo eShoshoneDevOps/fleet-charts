@@ -7,3 +7,4 @@ metadata:
 data:
   message: {{ .Values.message | quote }}
   replicas: {{ .Values.replicas | quote }}
+  fixA_test_marker: "setup-b-drift"
