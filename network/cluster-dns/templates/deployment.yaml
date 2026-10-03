@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-cluster-dns
+  annotations:
+    team-owner: "platform-eng"
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
