@@ -1,2 +1,1 @@
-Error: failed to fetch: unexpected status: 503 Service Unavailable
-Error: GET "https://<REGISTRY_HOST>/v2/<ORG>/<PARENT>/<CHART>/manifests/0.1.0": response status code 503: service unavailable
+Error: failed to perform "FetchReference" on source: GET "https://ghcr.io/v2/<ORG>/<PARENT>/<CHART>/manifests/0.1.0": response status code 503: unavailable: service unavailable
