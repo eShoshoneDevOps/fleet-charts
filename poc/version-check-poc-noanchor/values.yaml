@@ -1,4 +1,4 @@
-message: "fixC-live-test"
+message: "sanity-seed-0.2.4"
 replicas: 3
 labels:
   drift: "experiment-2"
