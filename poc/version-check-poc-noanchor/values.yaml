@@ -1,4 +1,4 @@
-message: "fixC-live-test"
+message: "sanity-check-no-bump"
 replicas: 3
 labels:
   drift: "experiment-2"
