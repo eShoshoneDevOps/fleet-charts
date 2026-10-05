@@ -1,4 +1,4 @@
-message: "drifted-r1"
+message: "sanity-diff-check-round-2"
 replicas: 3
 labels:
   drift: "round-1"
