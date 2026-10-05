@@ -22,7 +22,8 @@ _stage() {
   run "$SCRIPT" "$dir"
   [ "$status" -eq 0 ]
   [[ "$output" == *"name=testchart-plain"* ]]
-  [[ "$output" == *"version=0.1.0"* ]]
+  # sanity check 7 (deliberate failure): wrong expected version
+  [[ "$output" == *"version=9.9.9"* ]]
 }
 
 @test "quoted scalar version extracts to unquoted value" {
