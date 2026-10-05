@@ -2,7 +2,7 @@ apiVersion: v2
 name: parent-with-subchart
 description: Fix E repro — consumes shared/common-labels via a filesystem symlink under charts/, not a declared Chart.yaml dependency
 type: application
-version: 0.1.2
+version: 0.1.3
 appVersion: "0.1.0"
 dependencies:
   - name: common-labels
