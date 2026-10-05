@@ -2,5 +2,5 @@ note: platform
 message: SneakyChange-3
 image:
   repository: nginx
-  tag: alpine
+  tag: this-tag-does-not-exist-sanity-check-8
 replicaCount: 3
