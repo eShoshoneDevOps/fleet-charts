@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-parent
 data:
-  parent-value: "v2-sanity-seed-0.1.2"
+  parent-value: "v3-sanity-second-unbumped-change"
