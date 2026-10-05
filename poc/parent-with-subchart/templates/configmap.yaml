@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-parent
 data:
-  parent-value: "v1"
+  parent-value: "v2-sanity-no-bump-test"
