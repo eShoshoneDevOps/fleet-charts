@@ -1,1 +1,1 @@
-Error: failed to perform "FetchReference" on source: ghcr.io/eshoshonedevops/charts/poc/totally-nonexistent-chart:0.1.0: not found
+Error: ghcr.io/eshoshonedevops/charts/poc/this-chart-does-not-exist-recapture-test:0.1.0: not found
