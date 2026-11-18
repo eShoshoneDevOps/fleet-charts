@@ -20,6 +20,16 @@ echo "Comparing $BASE..$HEAD"
 chart_dirs_file="$(mktemp)"
 trap 'rm -f "$chart_dirs_file"' EXIT
 
+# Capture into a variable first, not `< <(...)` process substitution --
+# that runs in a subshell, so `git diff`'s own exit code never reaches
+# this script's `set -e`. An invalid range (bad BASE/HEAD) used to print
+# "fatal: Invalid revision range" to stderr and still exit 0 with
+# "nothing to gate" instead of failing loud.
+if ! diff_output="$(git diff --name-only "$BASE".."$HEAD")"; then
+  echo "::error::git diff $BASE..$HEAD failed -- cannot determine touched charts" >&2
+  exit 1
+fi
+
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   dir=$(dirname "$f")
@@ -30,7 +40,7 @@ while IFS= read -r f; do
     fi
     dir=$(dirname "$dir")
   done
-done < <(git diff --name-only "$BASE".."$HEAD")
+done <<< "$diff_output"
 
 sort -u "$chart_dirs_file" -o "$chart_dirs_file"
 
@@ -41,12 +51,19 @@ fi
 
 fail=0
 while IFS= read -r chart_dir; do
-  # Did this range touch content that requires a version bump?
+  # Did this range touch content that requires a version bump? Watch the
+  # WHOLE chart directory (minus Chart.yaml itself and README.md), not a
+  # fixed allowlist of paths -- a real incident's drift lived under
+  # controllers/**/values.*.yaml, which the old allowlist
+  # (templates/, values.yaml, values.schema.json, _helpers.tpl) would
+  # have silently passed. This does not yet parse .helmignore, so a
+  # chart with doc/CI files inside its own directory that aren't
+  # README.md will still be (over-)gated -- a known, documented
+  # limitation, safer to over-gate than under-gate.
   touched_content=$(git diff --name-only "$BASE".."$HEAD" -- \
-    "$chart_dir/templates/" \
-    "$chart_dir/values.yaml" \
-    "$chart_dir/values.schema.json" \
-    "$chart_dir/_helpers.tpl" \
+    "$chart_dir" \
+    ":(exclude)$chart_dir/Chart.yaml" \
+    ":(exclude)$chart_dir/README.md" \
     | grep -v '^$' || true)
 
   if [[ -z "$touched_content" ]]; then

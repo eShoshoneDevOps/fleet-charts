@@ -1,0 +1,5 @@
+apiVersion: v2
+name: |
+  evilname
+  extra=injected
+version: 0.1.0

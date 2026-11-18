@@ -80,6 +80,18 @@ _stage() {
   [[ "$output" == *"no name field"* ]]
 }
 
+@test "REGRESSION: multi-line name fails loudly instead of injecting extra GITHUB_OUTPUT lines" {
+  # This script's stdout is appended directly to $GITHUB_OUTPUT by the
+  # caller. A multi-line scalar (YAML block literal `name: |`) used to
+  # emit the extra lines verbatim -- each one becoming its own forged
+  # step output. Reproduced live 2026-11-18.
+  dir=$(_stage Chart.yaml.multiline-name-injection)
+  run "$SCRIPT" "$dir"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"single-line scalar"* ]]
+  [[ "$output" != *"extra=injected"* ]]
+}
+
 @test "missing Chart.yaml file fails loudly" {
   run "$SCRIPT" "$TMP/does-not-exist"
   [ "$status" -ne 0 ]
