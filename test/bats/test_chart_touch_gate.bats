@@ -86,6 +86,38 @@ _bump_chart_version() {
   [ "$status" -eq 0 ]
 }
 
+@test "non-allowlisted path (controllers/**/values.*.yaml) WITHOUT bump → gate fails" {
+  # Real-incident shape: drift lived under controllers/**/values.*.yaml,
+  # not templates/ or top-level values.yaml. The old gate only watched a
+  # fixed allowlist (templates/, values.yaml, values.schema.json,
+  # _helpers.tpl) and would have silently passed this. The gate now
+  # watches the whole chart dir (minus Chart.yaml/README.md), so this
+  # must fail.
+  mkdir -p mychart/controllers/foo
+  echo "replicas: 1" > mychart/controllers/foo/values.dev.yaml
+  git add -A && git commit -q -m 'add controllers dir'
+  BASE2=$(git rev-parse HEAD)
+
+  echo "replicas: 5" > mychart/controllers/foo/values.dev.yaml
+  git add -A && git commit -q -m 'drift controllers values, no bump'
+  HEAD=$(git rev-parse HEAD)
+
+  run "$SCRIPT" "$BASE2" "$HEAD"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"version-bump violation"* ]]
+  [[ "$output" == *"controllers/foo/values.dev.yaml"* ]]
+}
+
+@test "invalid revision range fails loud, not silently empty" {
+  # Process substitution (`< <(git diff ...)`) used to swallow git's own
+  # exit code -- an invalid range printed "fatal: Invalid revision
+  # range" to stderr but the script still exited 0 with "nothing to
+  # gate" instead of failing. Confirmed live against a bogus SHA.
+  run "$SCRIPT" "deadbeef0000000000000000000000000000dead" "HEAD"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"git diff"*"failed"* ]]
+}
+
 @test "REGRESSION — Chart.yaml with anchor, properly bumped, is detected as changed (yq, not awk)" {
   # Convert the fixture to use an anchor, bump via the anchor-aware extractor.
   cat > mychart/Chart.yaml <<'YAML'

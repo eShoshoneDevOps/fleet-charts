@@ -26,6 +26,17 @@ else
   BASE="${1:?base ref required (or pass --all)}"
   HEAD="${2:?head ref required}"
 
+  # Capture into a variable first, not `< <(...)` process substitution --
+  # a process substitution runs in a subshell, so `git diff`'s own exit
+  # code never reaches this script's `set -e`. An invalid range (e.g. a
+  # SHA git doesn't have, from a bad BASE) printed "fatal: Invalid
+  # revision range" to stderr but the script still exited 0 with an empty
+  # matrix -- "nothing to gate" -- when it should fail loud instead.
+  if ! diff_output="$(git diff --name-only "$BASE".."$HEAD")"; then
+    echo "::error::git diff $BASE..$HEAD failed -- cannot determine touched charts" >&2
+    exit 1
+  fi
+
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
     dir=$(dirname "$f")
@@ -36,7 +47,7 @@ else
       fi
       dir=$(dirname "$dir")
     done
-  done < <(git diff --name-only "$BASE".."$HEAD")
+  done <<< "$diff_output"
 
   sort -u "$chart_dirs_file" -o "$chart_dirs_file"
 fi

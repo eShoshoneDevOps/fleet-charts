@@ -121,6 +121,16 @@ YAML
   [[ "$output" == *"base ref required"* ]]
 }
 
+@test "invalid revision range fails loud, not silently has_charts=false" {
+  # Process substitution used to swallow git's own exit code -- an
+  # invalid range printed "fatal: Invalid revision range" to stderr but
+  # the script still exited 0 with an empty matrix/has_charts=false
+  # instead of failing. Confirmed live against a bogus SHA.
+  run env OCI_REGISTRY_ROOT=ghcr.io/myorg/charts "$SCRIPT" "deadbeef0000000000000000000000000000dead" "HEAD"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"git diff"*"failed"* ]]
+}
+
 @test "output is valid JSON parseable by yq" {
   run "$SCRIPT" --all
   [ "$status" -eq 0 ]

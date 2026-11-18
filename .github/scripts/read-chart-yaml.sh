@@ -33,5 +33,22 @@ if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
   exit 1
 fi
 
+# GITHUB_OUTPUT injection guard: this script's stdout is appended directly
+# to $GITHUB_OUTPUT by the caller (`>> "$GITHUB_OUTPUT"`). A multi-line
+# YAML scalar for name/version (e.g. a block literal `name: |`) would
+# otherwise put extra, attacker-chosen lines straight into that file,
+# each becoming its own forged step output. Reproduced live (2026-11-18):
+# a Chart.yaml with `name: |\n  evilname\n  extra=injected` emitted a
+# literal `extra=injected` output line. name/version must be a single
+# line each, full stop.
+if [[ "$NAME" == *$'\n'* ]]; then
+  echo "::error::$CHART_FILE: 'name' must be a single-line scalar, not multi-line" >&2
+  exit 1
+fi
+if [[ "$VERSION" == *$'\n'* ]]; then
+  echo "::error::$CHART_FILE: 'version' must be a single-line scalar, not multi-line" >&2
+  exit 1
+fi
+
 echo "name=$NAME"
 echo "version=$VERSION"

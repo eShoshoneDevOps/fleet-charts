@@ -33,8 +33,13 @@ setup() {
   [[ "$output" == *"tgz that was just pushed"* ]]
 }
 
-@test "missing expected-digest fails loudly" {
+@test "missing expected-digest is accepted (content-only fallback, not an argument error)" {
+  # Changed 2026-11-18: the digest arg used to be required (`:?`), but a
+  # push step whose own digest-parsing fails has no digest to pass --
+  # that used to mean verify-push could never run at all for that case.
+  # It's now optional (`:-`); the script proceeds to attempt the pull
+  # (which fails here for an unrelated reason -- no such registry/chart --
+  # but NOT with "expected digest required").
   run "$SCRIPT" "mychart" "0.1.0" "ghcr.io/org/charts" "/tmp/fake.tgz"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"expected digest"* ]]
+  [[ "$output" != *"expected digest"*"required"* ]]
 }

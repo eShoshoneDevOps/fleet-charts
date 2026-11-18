@@ -14,7 +14,11 @@ NAME="${1:?name required}"
 VERSION="${2:?version required}"
 OCI_REPO="${3:?oci-repo required}"
 PUSHED_TGZ="${4:?path to the tgz that was just pushed required}"
-EXPECTED_DIGEST="${5:?expected digest (from helm push output) required}"
+# Not required (`:-`, not `:?`): the caller may not have one if the push
+# step's own digest-parsing failed, or the push step failed outright after
+# content already landed server-side. Degrade to a content-only check
+# instead of refusing to run at all -- see the branch below.
+EXPECTED_DIGEST="${5:-}"
 
 FULL_OCI="oci://$OCI_REPO/$NAME"
 
@@ -35,7 +39,9 @@ if [[ -z "$actual_digest" ]]; then
   exit 1
 fi
 
-if [[ "$actual_digest" != "$EXPECTED_DIGEST" ]]; then
+if [[ -z "$EXPECTED_DIGEST" ]]; then
+  echo "::warning::no expected digest available to compare against (push step's own digest parsing likely failed) -- falling back to a content-only check against $actual_digest"
+elif [[ "$actual_digest" != "$EXPECTED_DIGEST" ]]; then
   echo "::error::DIGEST MISMATCH after push"
   echo "::error::  Expected (from helm push): $EXPECTED_DIGEST"
   echo "::error::  Actual (from helm pull):   $actual_digest"

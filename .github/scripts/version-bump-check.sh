@@ -29,7 +29,16 @@ if [[ $show_exit -ne 0 ]]; then
   # "no such host", which would silently misclassify a network outage as a
   # real 404 and publish anyway. Found via Experiment 1's real stderr capture
   # against live GHCR (the placeholder fixture didn't use this exact wording).
-  if echo "$show_stderr" | grep -qiE 'not found|manifest unknown|no such (repository|image|tag|manifest)|name unknown|404'; then
+  #
+  # NOTE 2: the bare `404` alternative was removed (2026-11-18) -- it matched
+  # the literal substring "404" ANYWHERE in stderr, including inside the
+  # chart's own version number. A chart versioned e.g. 1.404.0 hitting a real
+  # DNS outage produces stderr containing ".../manifests/1.404.0": ...no such
+  # host" -- the version string itself supplies the "404" substring, so a
+  # genuine network failure was misclassified as a safe-to-publish 404.
+  # Reproduced live; no real captured fixture ever actually needed this
+  # alternative (every real 404 case matches "not found" on its own).
+  if echo "$show_stderr" | grep -qiE 'not found|manifest unknown|no such (repository|image|tag|manifest)|name unknown'; then
     echo "::notice::PASS — $NAME@$VERSION not yet published, safe to publish"
     echo "action=publish"
     exit 0

@@ -144,11 +144,35 @@ jobs:
           set -euo pipefail
           push_output=$(helm push "${{ steps.package.outputs.tgz }}" "oci://${{ matrix.oci_repo }}" 2>&1)
           echo "$push_output"
-          digest=$(echo "$push_output" | grep -oE 'sha256:[a-f0-9]+' | head -1)
+          # Anchored to the literal "Digest: " line helm push actually prints
+          # (confirmed live with the CI-pinned helm v3.14.0), not a bare
+          # sha256-anywhere-in-the-text match -- and checked explicitly
+          # before writing to GITHUB_OUTPUT. Previously, under
+          # `set -euo pipefail`, a push whose output didn't contain a
+          # parseable digest line died right here with NO diagnostic
+          # message (bare `grep | head -1` failing is itself the pipeline's
+          # last command's exit status) -- the next step was then silently
+          # SKIPPED (its `if:` only checks version_check's output, not
+          # whether this step succeeded), so content could land server-side
+          # with zero verification and zero explanation of why.
+          digest=$(echo "$push_output" | grep -oE '^Digest: sha256:[a-f0-9]{64}$' | sed 's/^Digest: //') || true
+          if [[ -z "$digest" ]]; then
+            echo "::error::could not parse a 'Digest: sha256:<64hex>' line from helm push output -- see output above"
+            exit 1
+          fi
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Verify push (Fix C — post-push digest round-trip)
-        if: steps.version_check.outputs.action == 'publish'
+        # !cancelled() (not just action=='publish'): run this even if the
+        # push step above failed, so we always find out what the registry
+        # actually has -- e.g. helm push uploaded the content but the
+        # client/connection failed afterward, or digest parsing itself
+        # failed. verify-push.sh degrades gracefully to a content-only
+        # check when no expected digest is available (see its own
+        # comments). Confirmed live (2026-11-18): without this, a push
+        # failure orphaned verify-push entirely -- the job reported
+        # failure with the registry's real state never checked.
+        if: steps.version_check.outputs.action == 'publish' && !cancelled()
         run: |
           set -euo pipefail
           .github/scripts/verify-push.sh \
