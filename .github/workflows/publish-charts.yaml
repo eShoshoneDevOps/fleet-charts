@@ -39,6 +39,14 @@ on:
 
 jobs:
   detect:
+    # `workflow_dispatch` can be triggered against ANY ref the caller
+    # chooses -- unlike `push`, it is not restricted to `main` by the
+    # trigger declaration above, and involves no PR, so branch protection
+    # and CODEOWNERS never get a chance to apply. Confirmed live
+    # (2026-11-18): dispatching from a feature branch ran the full
+    # publish path, including the push step, with no check anywhere that
+    # this was the default branch. Guard explicitly.
+    if: github.event_name == 'push' || github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -59,7 +67,18 @@ jobs:
           OCI_REGISTRY_ROOT: ghcr.io/eshoshonedevops/charts
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_all }}" == "true" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # A manual dispatch has no meaningful "diff base" -- there is
+            # no before/after push pair, `github.event.before` is simply
+            # empty, not all-zeros. Confirmed live (2026-11-18): this used
+            # to fall through to diff mode with an empty BASE and the
+            # whole job failed outright ("base ref required"). force_all
+            # only changes WHETHER this is the deliberate, expected path;
+            # it is always the right fallback for workflow_dispatch,
+            # since there is nothing else to diff against.
+            if [[ "${{ inputs.force_all }}" != "true" ]]; then
+              echo "::notice::manual dispatch has no diff base to compare against -- processing every chart, same as force_all=true"
+            fi
             .github/scripts/detect-changed-charts.sh --all >> "$GITHUB_OUTPUT"
           else
             BASE="${{ github.event.before }}"
